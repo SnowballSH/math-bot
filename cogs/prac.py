@@ -7,7 +7,7 @@ from discord.ext import commands
 
 
 class PracticeCog(commands.Cog):
-    """A cog providing simple practice problems: square and modular inverse."""
+    """A cog providing practice problems."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -19,7 +19,7 @@ class PracticeCog(commands.Cog):
         name="prac",
         aliases=["practice"],
         invoke_without_command=True,
-        help="Practice problems. Subcommands: square, modinv, answer, giveup.",
+        help="Practice problems.",
     )
     async def prac(self, ctx: commands.Context):
         # If invoked without subcommand, show help/usage.
@@ -132,7 +132,6 @@ class PracticeCog(commands.Cog):
             return
 
         problem = self.problems[user_id]
-        # Reconstruct a description
         if problem["type"] == "square":
             n = problem["n"]
             ans = problem["answer"]
@@ -178,7 +177,7 @@ class PracticeCog(commands.Cog):
 
         await ctx.send(
             f"🔎 Your current problem: **{desc}**\n"
-            f"Submit answer with `prac answer <answer>` or give up with `{prefix}prac giveup`."
+            f"Submit answer with `{prefix}prac answer <answer>` or give up with `{prefix}prac giveup`."
         )
 
 
