@@ -120,34 +120,41 @@ class MathCog(commands.Cog):
             tex = os.path.join(tmpdir, "out.tex")
             with open(tex, "w") as f:
                 f.write(doc)
-            subprocess.run(
-                ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", tex],
-                cwd=tmpdir,
-                stdout=PIPE,
-                stderr=PIPE,
-                check=True,
-            )
-            pdf = os.path.join(tmpdir, "out.pdf")
-            subprocess.run(
-                [
-                    "pdftocairo",
-                    "-png",
-                    "-singlefile",
-                    "-r",
-                    "150",
-                    pdf,
-                    os.path.join(tmpdir, "out"),
-                ],
-                cwd=tmpdir,
-                stdout=PIPE,
-                stderr=PIPE,
-                check=True,
-            )
-            buf = io.BytesIO()
-            with open(os.path.join(tmpdir, "out.png"), "rb") as img:
-                buf.write(img.read())
-            buf.seek(0)
-            return buf
+            try:
+                subprocess.run(
+                    ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", tex],
+                    cwd=tmpdir,
+                    stdout=PIPE,
+                    stderr=PIPE,
+                    check=True,
+                )
+                pdf = os.path.join(tmpdir, "out.pdf")
+                subprocess.run(
+                    [
+                        "pdftocairo",
+                        "-png",
+                        "-singlefile",
+                        "-r",
+                        "150",
+                        pdf,
+                        os.path.join(tmpdir, "out"),
+                    ],
+                    cwd=tmpdir,
+                    stdout=PIPE,
+                    stderr=PIPE,
+                    check=True,
+                )
+                buf = io.BytesIO()
+                with open(os.path.join(tmpdir, "out.png"), "rb") as img:
+                    buf.write(img.read())
+                buf.seek(0)
+                return buf
+            except FileNotFoundError as e:
+                raise RuntimeError(f"Rendering tool not found: {e}")
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(
+                    f"LaTeX rendering failed: stdout={e.stdout}, stderr={e.stderr}"
+                )
 
     def _check_answer(
         self, user_ans: str, correct_expr: Any
@@ -177,7 +184,7 @@ class MathCog(commands.Cog):
         color: discord.Color,
         footer: Optional[str] = None,
     ) -> None:
-        """Send LaTeX-rendered image in an embed."""
+        """Send LaTeX-rendered image in an embed; on error, show raw code."""
         try:
             buf = self._render_text_image(text)
             file = discord.File(buf, filename="image.png")
@@ -187,7 +194,10 @@ class MathCog(commands.Cog):
                 embed.set_footer(text=footer)
             await ctx.send(embed=embed, file=file)
         except RuntimeError as e:
-            await ctx.send(f"{title}:\n{text}\nError: {e}")
+            msg = f"""Error rendering LaTeX ({title.lower()}): {e}\nRaw LaTeX:\n```
+{text}
+```"""
+            await ctx.send(msg)
 
     @commands.group(name="math", invoke_without_command=True)
     async def math(self, ctx: commands.Context) -> None:
@@ -281,19 +291,17 @@ class MathCog(commands.Cog):
         if not self.leaderboard:
             await ctx.send("Leaderboard is empty.")
             return
-        if sort_by is None:
-            sort_by = "solved"
-        entries = []
+        entries: List[Tuple[int, int, int]] = []
         for uid_str, data in self.leaderboard.items():
             uid = int(uid_str)
             entries.append((uid, data.get("solved", 0), data.get("attempted", 0)))
-        if sort_by.lower() in ("rate", "solve_rate"):
+        if sort_by.lower() in ("rate", "solve_rate"):  # type: ignore
             entries.sort(key=lambda x: x[1] / x[2] if x[2] > 0 else 0, reverse=True)
             title = "📊 Leaderboard by solve rate"
         else:
             entries.sort(key=lambda x: x[1], reverse=True)
             title = "📊 Leaderboard by solved count"
-        lines = []
+        lines: List[str] = []
         guild = ctx.guild
         for idx, (uid, solved, attempted) in enumerate(entries, start=1):
             user_label = str(uid)
@@ -312,7 +320,8 @@ class MathCog(commands.Cog):
                     user_label = user_obj.name
             rate = f"{(solved/attempted*100):.1f}%" if attempted > 0 else "N/A"
             lines.append(f"{idx}. {user_label} — {solved}/{attempted} ({rate})")
-        await ctx.send(f"**{title}**\n" + "\n".join(lines))
+        message = f"**{title}**\n" + "\n".join(lines)
+        await ctx.send(message)
 
 
 async def setup(bot: commands.Bot) -> None:
