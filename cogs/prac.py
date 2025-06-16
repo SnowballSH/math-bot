@@ -17,7 +17,7 @@ class PracticeCog(commands.Cog):
 
     @commands.group(
         name="prac",
-        aliases=["practice"],
+        aliases=["practice", "p"],
         invoke_without_command=True,
         help="Practice problems.",
     )
@@ -28,7 +28,7 @@ class PracticeCog(commands.Cog):
             "**Practice commands:**",
             f"`{prefix}prac square` → start a squaring problem",
             f"`{prefix}prac modinv` → start a modular inverse problem",
-            f"`{prefix}prac answer <your_answer>` → submit answer",
+            f"`{prefix}prac submit <your_answer>` → submit answer",
             f"`{prefix}prac giveup` → give up current problem (shows answer)",
             f"`{prefix}prac current` → view your current problem (without answer)",
         ]
@@ -44,7 +44,7 @@ class PracticeCog(commands.Cog):
         if self._has_active(user_id):
             await ctx.send(
                 "You already have an active problem. "
-                f"Finish it with `{prefix}prac answer <answer>` or give up with `{prefix}prac giveup`."
+                f"Finish it with `{prefix}prac submit <answer>` or give up with `{prefix}prac giveup`."
             )
             return
 
@@ -54,7 +54,7 @@ class PracticeCog(commands.Cog):
         self.problems[user_id] = {"type": "square", "n": n, "answer": answer}
         await ctx.send(
             f"**Square problem:** What is **{n}** squared? "
-            f"Submit with `{prefix}prac answer <answer>`."
+            f"Submit with `{prefix}prac submit <answer>`."
         )
 
     @prac.command(name="modinv", help="Generate a modular inverse problem.")
@@ -64,7 +64,7 @@ class PracticeCog(commands.Cog):
         if self._has_active(user_id):
             await ctx.send(
                 "You already have an active problem. "
-                f"Finish it with `{prefix}prac answer <answer>` or give up with `{prefix}prac giveup`."
+                f"Finish it with `{prefix}prac submit <answer>` or give up with `{prefix}prac giveup`."
             )
             return
 
@@ -81,11 +81,15 @@ class PracticeCog(commands.Cog):
         self.problems[user_id] = {"type": "modinv", "a": a, "m": m, "answer": inv}
         await ctx.send(
             f"**Modular inverse problem:** Find the inverse of **{a}** modulo **{m}**. "
-            f"Submit with `{prefix}prac answer <answer>`."
+            f"Submit with `{prefix}prac submit <answer>`."
         )
 
-    @prac.command(name="answer", help="Submit your answer to the current problem.")
-    async def prac_answer(self, ctx: commands.Context, user_answer: str):
+    @prac.command(
+        name="submit",
+        help="Submit your answer to the current problem.",
+        aliases=["answer"],
+    )
+    async def prac_submit(self, ctx: commands.Context, user_answer: str):
         user_id = ctx.author.id
         prefix = ctx.clean_prefix
         if not self._has_active(user_id):
@@ -101,7 +105,7 @@ class PracticeCog(commands.Cog):
             ans_int = int(user_answer.strip())
         except ValueError:
             await ctx.send(
-                f"Please submit an integer answer, e.g. `{prefix}prac answer 42`."
+                f"Please submit an integer answer, e.g. `{prefix}prac submit 42`."
             )
             return
 
@@ -177,7 +181,7 @@ class PracticeCog(commands.Cog):
 
         await ctx.send(
             f"🔎 Your current problem: **{desc}**\n"
-            f"Submit answer with `{prefix}prac answer <answer>` or give up with `{prefix}prac giveup`."
+            f"Submit answer with `{prefix}prac submit <answer>` or give up with `{prefix}prac giveup`."
         )
 
 

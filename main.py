@@ -26,6 +26,11 @@ async def load_extensions():
         print("Loaded prac cog")
     except Exception as e:
         print(f"Could not load prac cog: {e}")
+    try:
+        await bot.load_extension("cogs.math")
+        print("Loaded math cog")
+    except Exception as e:
+        print(f"Could not load math cog: {e}")
 
 
 @bot.event
