@@ -47,3 +47,22 @@ def test_check_answer_malicious_input(cog):
     expr = parse_latex("5")
     ok, err = MathCog._check_answer(cog, "__import__('os').system('echo hi')", expr)
     assert not ok
+
+
+def test_parse_problem_args_basic(cog):
+    subj, lvl = MathCog._parse_problem_args("subject=Algebra level=2")
+    assert subj == "Algebra"
+    assert lvl == 2
+
+
+def test_parse_problem_args_order_and_spaces(cog):
+    args = "level=3 subject=Counting & Probability"
+    subj, lvl = MathCog._parse_problem_args(args)
+    assert subj == "Counting & Probability"
+    assert lvl == 3
+
+
+def test_parse_problem_args_case_insensitive(cog):
+    subj, lvl = MathCog._parse_problem_args("SUBJECT=geometry LEVEL=5")
+    assert subj == "geometry"
+    assert lvl == 5

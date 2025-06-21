@@ -105,7 +105,7 @@ class MathCog(commands.Cog):
         params: list = []
         filters: list = []
         if subject:
-            filters.append("subject = ?")
+            filters.append("LOWER(subject) = LOWER(?)")
             params.append(subject)
         if level is not None:
             filters.append("level = ?")
@@ -283,6 +283,36 @@ class MathCog(commands.Cog):
                 return False, "invalid"
         return (True, None) if diff < 1e-6 else (False, "wrong")
 
+    @staticmethod
+    def _parse_problem_args(args: str | None) -> tuple[Optional[str], Optional[int]]:
+        """Parse arguments for the problem command.
+
+        Returns a tuple ``(subject, level)`` where each value may be ``None``.
+        Matching is case-insensitive and subjects may contain spaces.
+        Example::
+
+            subject, level = MathCog._parse_problem_args(
+                "subject=Counting & Probability level=3"
+            )
+        """
+
+        subject = None
+        level = None
+        if not args:
+            return subject, level
+
+        m_level = re.search(r"level=(\d+)", args, re.IGNORECASE)
+        if m_level:
+            level = int(m_level.group(1))
+
+        m_subject = re.search(
+            r"subject=([^\n]*?)(?=\s+level=|$)", args, re.IGNORECASE
+        )
+        if m_subject:
+            subject = m_subject.group(1).strip()
+
+        return subject, level
+
     async def _send_image_embed(
         self,
         ctx: commands.Context,
@@ -322,15 +352,7 @@ class MathCog(commands.Cog):
         self, ctx: commands.Context, *, args: Optional[str] = None
     ) -> None:
         try:
-            subject = None
-            level = None
-            if args:
-                m = re.search(r"subject=([^\s]+)", args)
-                if m:
-                    subject = m.group(1)
-                m2 = re.search(r"level=(\d+)", args)
-                if m2:
-                    level = int(m2.group(1))
+            subject, level = self._parse_problem_args(args)
 
             uid = ctx.author.id
             if uid in self.active:
