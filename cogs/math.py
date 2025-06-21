@@ -190,6 +190,9 @@ class MathCog(commands.Cog):
                     stderr=PIPE,
                     check=True,
                 )
+            except FileNotFoundError as e:
+                logger.error("LaTeX tool missing: %s", e)
+                raise RuntimeError(f"Rendering tool not found: {e}") from e
             except CalledProcessError as e:
                 logger.error(
                     "LaTeX subprocess failed: %s; stdout: %s; stderr: %s",
