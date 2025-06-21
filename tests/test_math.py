@@ -36,3 +36,14 @@ def test_check_answer_wrong(cog):
 def test_check_answer_invalid(cog):
     expr = parse_latex("5")
     assert MathCog._check_answer(cog, "five", expr) == (False, "invalid")
+
+
+def test_check_answer_numeric_expression(cog):
+    expr = parse_latex("5")
+    assert MathCog._check_answer(cog, "2+3", expr) == (True, None)
+
+
+def test_check_answer_malicious_input(cog):
+    expr = parse_latex("5")
+    ok, err = MathCog._check_answer(cog, "__import__('os').system('echo hi')", expr)
+    assert not ok
