@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 
 import discord
 from discord.ext import commands
-from sympy import N
+from sympy import N, sympify
 from sympy.parsing.latex import parse_latex
 
 logger = logging.getLogger(__name__)
@@ -275,10 +275,10 @@ class MathCog(commands.Cog):
             diff = abs(float(N(ue, 15)) - float(N(correct_expr, 15)))
         except Exception:
             try:
-                val = eval(ans, {"__builtins__": None}, {})
-                if not isinstance(val, (int, float)):
+                ue = sympify(ans, evaluate=True)
+                if ue.free_symbols:
                     return False, "invalid"
-                diff = abs(val - float(N(correct_expr, 15)))
+                diff = abs(float(N(ue, 15)) - float(N(correct_expr, 15)))
             except Exception:
                 return False, "invalid"
         return (True, None) if diff < 1e-6 else (False, "wrong")
