@@ -8,9 +8,10 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 if not TOKEN:
     raise RuntimeError("DISCORD_TOKEN not set in environment")
 
-# Intents: enable message_content intent if you use prefix commands
 intents = discord.Intents.default()
 intents.message_content = True
+intents.guilds = True
+intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
