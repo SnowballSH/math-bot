@@ -11,4 +11,6 @@ wheels/
 
 
 .env
-cogs/math500/*
+cogs/math500/*.json
+cogs/math500/*.jsonl
+cogs/math500/*.db
