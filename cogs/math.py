@@ -145,18 +145,29 @@ class MathCog(commands.Cog):
         return cleaned.replace("$$", "$")
 
     def _render_text_image(self, text: str) -> io.BytesIO:
+        # Detect Asymptote blocks of the form [asy]...[/asy]
+        asy_pattern = re.compile(r"\[asy\](.*?)\[/asy\]", re.DOTALL)
+        has_asy = bool(asy_pattern.search(text))
+        if has_asy:
+            text = asy_pattern.sub(r"\\begin{asy}\1\\end{asy}", text)
+
+        preamble = [
+            "\\documentclass{article}",
+            "\\usepackage[margin=10pt]{geometry}",
+            "\\usepackage[active,tightpage]{preview}",
+            "\\PreviewEnvironment{preview}",
+            "\\setlength\\PreviewBorder{10pt}",
+            "\\usepackage{xcolor,amsmath,amssymb}",
+        ]
+
+        if has_asy:
+            preamble.append("\\usepackage{asymptote}")
+
         doc = (
-            "\\documentclass{article}\n"
-            "\\usepackage[margin=10pt]{geometry}\n"
-            "\\usepackage[active,tightpage]{preview}\n"
-            "\\PreviewEnvironment{preview}\n"
-            "\\setlength\\PreviewBorder{10pt}\n"
-            "\\usepackage{xcolor,amsmath,amssymb}\n"
-            "\\begin{document}\n"
-            "\\begin{preview}\n"
-            f"{text}\n"
-            "\\end{preview}\n"
-            "\\end{document}\n"
+            "\n".join(preamble)
+            + "\n\\begin{document}\n\\begin{preview}\n"
+            + f"{text}\n"
+            + "\\end{preview}\n\\end{document}\n"
         )
         with tempfile.TemporaryDirectory() as tmpdir:
             tex_path = os.path.join(tmpdir, "out.tex")
@@ -175,6 +186,32 @@ class MathCog(commands.Cog):
                     stderr=PIPE,
                     check=True,
                 )
+
+                if has_asy:
+                    for asy_file in sorted(
+                        p for p in os.listdir(tmpdir) if p.endswith(".asy")
+                    ):
+                        subprocess.run(
+                            ["asy", asy_file],
+                            cwd=tmpdir,
+                            stdout=PIPE,
+                            stderr=PIPE,
+                            check=True,
+                        )
+
+                    subprocess.run(
+                        [
+                            "pdflatex",
+                            "-interaction=nonstopmode",
+                            "-halt-on-error",
+                            tex_path,
+                        ],
+                        cwd=tmpdir,
+                        stdout=PIPE,
+                        stderr=PIPE,
+                        check=True,
+                    )
+
                 subprocess.run(
                     [
                         "pdftocairo",
