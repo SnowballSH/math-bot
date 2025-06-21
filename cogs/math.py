@@ -313,6 +313,7 @@ class MathCog(commands.Cog):
             f"`{ctx.clean_prefix}math giveup` → show solution",
             f"`{ctx.clean_prefix}math current` → view current",
             f"`{ctx.clean_prefix}math leaderboard [rate]` → show leaderboard",
+            f"`{ctx.clean_prefix}math options` → list subjects and levels",
         )
         await ctx.send("__**Math commands**__\n" + "\n".join(commands_list))
 
@@ -447,6 +448,33 @@ class MathCog(commands.Cog):
             )
         except Exception as e:
             logger.exception("Error in current command: %s", e)
+            await ctx.send("An unexpected error occurred. Please try again later.")
+
+    @math.command(name="options")
+    async def math_options(self, ctx: commands.Context) -> None:
+        """List all available subjects and levels."""
+        try:
+            subjects_rows = self.conn.execute(
+                "SELECT DISTINCT subject FROM problems WHERE subject != '' ORDER BY subject"
+            ).fetchall()
+            subjects = [r["subject"] for r in subjects_rows if r["subject"]]
+
+            levels_rows = self.conn.execute(
+                "SELECT DISTINCT level FROM problems ORDER BY level"
+            ).fetchall()
+            levels = [str(r["level"]) for r in levels_rows if r["level"] is not None]
+
+            lines = []
+            if subjects:
+                lines.append("__**Subjects**__: " + ", ".join(subjects))
+            if levels:
+                lines.append("__**Levels**__: " + ", ".join(levels))
+            if not lines:
+                lines.append("No subjects or levels found.")
+
+            await ctx.send("\n".join(lines))
+        except Exception as e:
+            logger.exception("Error in options command: %s", e)
             await ctx.send("An unexpected error occurred. Please try again later.")
 
     @math.command(name="leaderboard")
