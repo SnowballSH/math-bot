@@ -318,7 +318,9 @@ class MathCog(commands.Cog):
         try:
             uid = ctx.author.id
             if uid not in self.active:
-                await ctx.send("No active problem. Use `math problem` to start.")
+                await ctx.send(
+                    f"No active problem. Use `{ctx.clean_prefix}math problem` to start."
+                )
                 return
 
             pid = self.active[uid]
@@ -332,7 +334,7 @@ class MathCog(commands.Cog):
                 msg = (
                     "Invalid format."
                     if err == "invalid"
-                    else "❌ Incorrect. Try again or use `math giveup`."
+                    else f"❌ Incorrect. Try again or use `{ctx.clean_prefix}math giveup`."
                 )
                 await ctx.send(msg)
                 return
@@ -352,7 +354,9 @@ class MathCog(commands.Cog):
         try:
             uid = ctx.author.id
             if uid not in self.active:
-                await ctx.send("No active problem. Use `math problem` to start.")
+                await ctx.send(
+                    f"No active problem. Use `{ctx.clean_prefix}math problem` to start."
+                )
                 return
 
             pid = self.active.pop(uid)
@@ -373,7 +377,9 @@ class MathCog(commands.Cog):
         try:
             uid = ctx.author.id
             if uid not in self.active:
-                await ctx.send("No active problem. Use `math problem` to start.")
+                await ctx.send(
+                    f"No active problem. Use `{ctx.clean_prefix}math problem` to start."
+                )
                 return
 
             row = self.conn.execute(
@@ -385,7 +391,7 @@ class MathCog(commands.Cog):
                 row["problem"],
                 "🔎 Current",
                 discord.Color.dark_blue(),
-                f"Submit with `{ctx.clean_prefix}math submit <answer>` or `math giveup`",
+                f"Submit with `{ctx.clean_prefix}math submit <answer>` or `{ctx.clean_prefix}math giveup`",
             )
         except Exception as e:
             logger.exception("Error in current command: %s", e)
