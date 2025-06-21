@@ -242,14 +242,6 @@ class MathCog(commands.Cog):
                     stderr=PIPE,
                     check=True,
                 )
-
-                subprocess.run(
-                    ["convert", "out.png", "-trim", "+repage", "out.png"],
-                    cwd=tmpdir,
-                    stdout=PIPE,
-                    stderr=PIPE,
-                    check=True,
-                )
             except FileNotFoundError as e:
                 logger.error("LaTeX tool missing: %s", e)
                 raise RuntimeError(f"Rendering tool not found: {e}") from e
