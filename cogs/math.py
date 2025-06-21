@@ -147,9 +147,17 @@ class MathCog(commands.Cog):
     def _render_text_image(self, text: str) -> io.BytesIO:
         # Detect Asymptote blocks of the form [asy]...[/asy]
         asy_pattern = re.compile(r"\[asy\](.*?)\[/asy\]", re.DOTALL)
-        has_asy = bool(asy_pattern.search(text))
-        if has_asy:
-            text = asy_pattern.sub(r"\\begin{asy}\1\\end{asy}", text)
+        has_asy = False
+
+        def repl(match: re.Match[str]) -> str:
+            nonlocal has_asy
+            has_asy = True
+            body = match.group(1).strip()
+            if "import olympiad" not in body:
+                body = "import olympiad;\n" + body
+            return "\n\\begin{asy}\n" + body + "\n\\end{asy}\n"
+
+        text = asy_pattern.sub(repl, text)
 
         preamble = [
             "\\documentclass{article}",
