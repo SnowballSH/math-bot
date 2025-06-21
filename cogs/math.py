@@ -5,6 +5,7 @@ import re
 import sqlite3
 import subprocess
 import tempfile
+import shutil
 import logging
 from subprocess import PIPE, CalledProcessError
 from typing import Any, Dict, Optional
@@ -145,23 +146,48 @@ class MathCog(commands.Cog):
         return cleaned.replace("$$", "$")
 
     def _render_text_image(self, text: str) -> io.BytesIO:
+        # Detect Asymptote blocks of the form [asy]...[/asy]
+        asy_pattern = re.compile(r"\[asy\](.*?)\[/asy\]", re.DOTALL)
+        has_asy = False
+
+        def _asy_repl(match: re.Match) -> str:
+            nonlocal has_asy
+            has_asy = True
+            code = match.group(1).strip()
+            if "import olympiad;" not in code:
+                code = "import olympiad;\n" + code
+            return "\n\\begin{asy}\n" + code + "\n\\end{asy}\n"
+
+        text = asy_pattern.sub(_asy_repl, text)
+
+        preamble = [
+            "\\documentclass{article}",
+            "\\usepackage[margin=10pt]{geometry}",
+            "\\usepackage[active,tightpage]{preview}",
+            "\\PreviewEnvironment{preview}",
+            "\\setlength\\PreviewBorder{10pt}",
+            "\\usepackage{xcolor,amsmath,amssymb}",
+        ]
+
+        if has_asy:
+            preamble.append("\\usepackage{asymptote}")
+
         doc = (
-            "\\documentclass{article}\n"
-            "\\usepackage[margin=10pt]{geometry}\n"
-            "\\usepackage[active,tightpage]{preview}\n"
-            "\\PreviewEnvironment{preview}\n"
-            "\\setlength\\PreviewBorder{10pt}\n"
-            "\\usepackage{xcolor,amsmath,amssymb}\n"
-            "\\begin{document}\n"
-            "\\begin{preview}\n"
-            f"{text}\n"
-            "\\end{preview}\n"
-            "\\end{document}\n"
+            "\n".join(preamble)
+            + "\n\\begin{document}\n\\begin{preview}\n"
+            + f"{text}\n"
+            + "\\end{preview}\n\\end{document}\n"
         )
         with tempfile.TemporaryDirectory() as tmpdir:
             tex_path = os.path.join(tmpdir, "out.tex")
             with open(tex_path, "w", encoding="utf-8") as f:
                 f.write(doc)
+            if has_asy:
+                olymp = os.path.join(
+                    os.path.dirname(__file__), "math500", "olympiad.asy"
+                )
+                if os.path.exists(olymp):
+                    shutil.copy(olymp, tmpdir)
             try:
                 subprocess.run(
                     [
@@ -175,6 +201,32 @@ class MathCog(commands.Cog):
                     stderr=PIPE,
                     check=True,
                 )
+
+                if has_asy:
+                    for asy_file in sorted(
+                        p for p in os.listdir(tmpdir) if p.endswith(".asy")
+                    ):
+                        subprocess.run(
+                            ["asy", asy_file],
+                            cwd=tmpdir,
+                            stdout=PIPE,
+                            stderr=PIPE,
+                            check=True,
+                        )
+
+                    subprocess.run(
+                        [
+                            "pdflatex",
+                            "-interaction=nonstopmode",
+                            "-halt-on-error",
+                            tex_path,
+                        ],
+                        cwd=tmpdir,
+                        stdout=PIPE,
+                        stderr=PIPE,
+                        check=True,
+                    )
+
                 subprocess.run(
                     [
                         "pdftocairo",
