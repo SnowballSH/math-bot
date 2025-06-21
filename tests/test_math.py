@@ -1,13 +1,16 @@
 import os, sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pytest
 from sympy.parsing.latex import parse_latex
 from cogs.math import MathCog
 
+
 @pytest.fixture
 def cog():
     # Create MathCog instance without running __init__ to avoid side effects
     return object.__new__(MathCog)
+
 
 def test_clean_answer_strips_boxed(cog):
     assert MathCog._clean_answer_latex(r"\boxed{5}") == "5"
@@ -33,4 +36,3 @@ def test_check_answer_wrong(cog):
 def test_check_answer_invalid(cog):
     expr = parse_latex("5")
     assert MathCog._check_answer(cog, "five", expr) == (False, "invalid")
-

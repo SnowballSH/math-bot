@@ -6,3 +6,4 @@ jishaku
 python-dotenv
 matplotlib
 numpy
+pytest
