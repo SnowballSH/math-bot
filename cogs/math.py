@@ -145,9 +145,31 @@ class MathCog(commands.Cog):
         cleaned = re.sub(r"\\boxed\s*\{([^}]*)\}", r"\1", ans)
         return cleaned.replace("$$", "$")
 
-    def _render_text_image(self, text: str) -> io.BytesIO:
+    @staticmethod
+    def _convert_tags(text: str) -> str:
+        """Convert <math> and <asy> HTML tags to plain LaTeX/Asy blocks."""
+        text = re.sub(
+            r"<math>(.*?)</math>",
+            lambda m: f"${m.group(1)}$",
+            text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        text = re.sub(
+            r"<asy>(.*?)</asy>",
+            lambda m: f"[asy]{m.group(1)}[/asy]",
+            text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        return text
+
+    @staticmethod
+    def _render_text_image(text: str) -> io.BytesIO:
+        """Render LaTeX or Asymptote text to an image."""
+        # Preprocess custom math tags
+        text = MathCog._convert_tags(text)
+
         # Detect Asymptote blocks of the form [asy]...[/asy]
-        asy_pattern = re.compile(r"\[asy\](.*?)\[/asy\]", re.DOTALL)
+        asy_pattern = re.compile(r"\[asy\](.*?)\[/asy\]", re.DOTALL | re.IGNORECASE)
         has_asy = False
 
         def _asy_repl(match: re.Match) -> str:
