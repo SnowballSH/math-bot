@@ -13,7 +13,7 @@ intents.message_content = True
 intents.guilds = True
 intents.members = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="?", intents=intents)
 
 
 async def load_extensions():
@@ -32,6 +32,11 @@ async def load_extensions():
         print("Loaded math cog")
     except Exception as e:
         print(f"Could not load math cog: {e}")
+    try:
+        await bot.load_extension("cogs.potd")
+        print("Loaded potd cog")
+    except Exception as e:
+        print(f"Could not load potd cog: {e}")
 
 
 @bot.event
