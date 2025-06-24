@@ -155,6 +155,9 @@ class PotdCog(commands.Cog):
         row = await self.get_problem_for_date(today)
         if not row:
             logger.warning("POTD for %s not found", today.date())
+            await channel.send(
+                f"No POTD found for {today.strftime('%m/%d/%Y')}. Please check the sheet."
+            )
             return
         self.current_date = today.strftime("%m/%d/%Y")
         self.current_problem = row.get("Problem") or row.get("problem") or ""
@@ -164,7 +167,7 @@ class PotdCog(commands.Cog):
         self.attempts.clear()
         self.solved.clear()
         self.solve_order.clear()
-        footer = f"Difficulty: {self.current_diff} | Submit in DMs with `potd submit <choice>`"
+        footer = f"Difficulty: {self.current_diff} | Submit in DMs with `!potd submit <choice>`"
         await self.send_image_embed(
             channel,
             self.current_problem,

@@ -176,9 +176,11 @@ class MathCog(commands.Cog):
             nonlocal has_asy
             has_asy = True
             code = match.group(1).strip()
+            if "unitsize" not in code:
+                code = "unitsize(38pt);\n" + code
             if "import olympiad;" not in code:
                 code = "import olympiad;\n" + code
-            return "\n\\begin{asy}\n" + code + "\n\\end{asy}\n"
+            return "\n\\begin{center}\n\\begin{asy}\n" + code + "\n\\end{asy}\n\\end{center}\n"
 
         text = asy_pattern.sub(_asy_repl, text)
 
