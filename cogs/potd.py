@@ -140,7 +140,7 @@ class PotdCog(commands.Cog):
 
         await channel.send(embed=embed)
 
-    @tasks.loop(time=time(6, tzinfo=ZoneInfo("America/Chicago")))
+    @tasks.loop(time=time(5, tzinfo=ZoneInfo("America/Chicago")))
     async def daily_post(self) -> None:
         guild = self.bot.get_guild(self.GUILD_ID)
         if not guild:
