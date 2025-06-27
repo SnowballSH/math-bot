@@ -47,7 +47,7 @@ class PotdCog(commands.Cog):
         async with aiohttp.ClientSession() as session:
             async with session.get(self.SHEET_URL) as resp:
                 text = await resp.text()
-        rows = list(csv.reader(text.splitlines()))
+        rows = list(csv.reader(text.splitlines(keepends=True), delimiter=","))
         header = [h.strip() for h in rows[0]]
         data = []
         for row in rows[1:]:
