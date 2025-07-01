@@ -1,3 +1,9 @@
+# FireballSH
+
+![fireballsh](https://github.com/user-attachments/assets/b48650c4-253d-4475-a478-fad462a78d83)
+
+A Discord Bot that Provides Students with 24/7 Math Practice
+
 ## Things to download
 
 - `requirements.txt`
