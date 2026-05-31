@@ -1,8 +1,6 @@
-import os, sys
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pytest
 from sympy.parsing.latex import parse_latex
+
 from cogs.math import MathCog
 
 

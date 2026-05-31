@@ -8,7 +8,7 @@ import tempfile
 import shutil
 import logging
 from subprocess import PIPE, CalledProcessError
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import discord
 from discord.ext import commands
@@ -16,6 +16,13 @@ from sympy import N, sympify
 from sympy.parsing.latex import parse_latex
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_latex_required(text: str) -> Any:
+    expr = parse_latex(text)
+    if expr is None:
+        raise ValueError("LaTeX parser returned no expression")
+    return expr
 
 
 class MathCog(commands.Cog):
@@ -32,7 +39,6 @@ class MathCog(commands.Cog):
         self.active: Dict[int, int] = {}
 
     def _ensure_db(self) -> None:
-        first_init = not os.path.exists(self.db_path)
         conn = sqlite3.connect(self.db_path)
         try:
             conn.execute(
@@ -59,7 +65,8 @@ class MathCog(commands.Cog):
                 """
             )
             conn.commit()
-            if first_init:
+            problem_count = conn.execute("SELECT COUNT(*) FROM problems").fetchone()[0]
+            if problem_count == 0:
                 self._populate_problems(conn)
                 conn.commit()
         except sqlite3.Error as e:
@@ -69,6 +76,8 @@ class MathCog(commands.Cog):
             conn.close()
 
     def _populate_problems(self, conn: sqlite3.Connection) -> None:
+        inserted = 0
+        skipped = 0
         for fname in ("train.jsonl", "test.jsonl"):
             path = os.path.join(self.data_dir, fname)
             if not os.path.exists(path):
@@ -79,7 +88,7 @@ class MathCog(commands.Cog):
                     try:
                         ex = json.loads(line)
                         ans_tex = self._clean_answer_latex(ex.get("answer", ""))
-                        expr = parse_latex(ans_tex)
+                        expr = _parse_latex_required(ans_tex)
                         if expr.free_symbols:
                             continue
                         conn.execute(
@@ -94,9 +103,12 @@ class MathCog(commands.Cog):
                                 ex.get("unique_id", ""),
                             ),
                         )
-                    except (json.JSONDecodeError, Exception) as e:
-                        logger.warning("Skipping invalid example: %s", e)
+                        inserted += 1
+                    except Exception as e:
+                        skipped += 1
+                        logger.debug("Skipping invalid example: %s", e)
                         continue
+        logger.info("Loaded %s math problems; skipped %s examples", inserted, skipped)
 
     def _get_random_problem(
         self, subject: Optional[str] = None, level: Optional[int] = None
@@ -180,7 +192,11 @@ class MathCog(commands.Cog):
                 code = "unitsize(38pt);\n" + code
             if "import olympiad;" not in code:
                 code = "import olympiad;\n" + code
-            return "\n\\begin{center}\n\\begin{asy}\n" + code + "\n\\end{asy}\n\\end{center}\n"
+            return (
+                "\n\\begin{center}\n\\begin{asy}\n"
+                + code
+                + "\n\\end{asy}\n\\end{center}\n"
+            )
 
         text = asy_pattern.sub(_asy_repl, text)
 
@@ -293,13 +309,13 @@ class MathCog(commands.Cog):
     ) -> tuple[bool, Optional[str]]:
         ans = self._clean_answer_latex(user_ans).strip().replace("$", "")
         try:
-            ue = parse_latex(ans)
+            ue = _parse_latex_required(ans)
             if ue.free_symbols:
                 return False, "invalid"
             diff = abs(float(N(ue, 15)) - float(N(correct_expr, 15)))
         except Exception:
             try:
-                ue = sympify(ans, evaluate=True)
+                ue = cast(Any, sympify)(ans, evaluate=True)
                 if ue.free_symbols:
                     return False, "invalid"
                 diff = abs(float(N(ue, 15)) - float(N(correct_expr, 15)))
@@ -329,9 +345,7 @@ class MathCog(commands.Cog):
         if m_level:
             level = int(m_level.group(1))
 
-        m_subject = re.search(
-            r"subject=([^\n]*?)(?=\s+level=|$)", args, re.IGNORECASE
-        )
+        m_subject = re.search(r"subject=([^\n]*?)(?=\s+level=|$)", args, re.IGNORECASE)
         if m_subject:
             subject = m_subject.group(1).strip()
 
@@ -426,7 +440,7 @@ class MathCog(commands.Cog):
             row = self.conn.execute(
                 "SELECT solution, answer_tex FROM problems WHERE id = ?", (pid,)
             ).fetchone()
-            correct_expr = parse_latex(row["answer_tex"])
+            correct_expr = _parse_latex_required(row["answer_tex"])
             correct, err = self._check_answer(user_ans, correct_expr)
 
             if not correct:
@@ -558,7 +572,7 @@ class MathCog(commands.Cog):
                     ) or await self.bot.fetch_user(r["user_id"])
                 name = user.display_name if hasattr(user, "display_name") else user.name
                 lines.append(
-                    f"{i+1}. {name} — {r['solved']}/{r['attempted']} ({r['rate']})"
+                    f"{i + 1}. {name} — {r['solved']}/{r['attempted']} ({r['rate']})"
                 )
 
             await ctx.send(f"**{title}**\n" + "\n".join(lines))

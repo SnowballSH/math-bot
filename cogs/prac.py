@@ -1,19 +1,35 @@
-# cogs/prac.py
-import random
-import math
+from __future__ import annotations
 
-import discord
+import math
+import random
+from typing import Literal, TypedDict
+
 from discord.ext import commands
+
+
+class SquareProblem(TypedDict):
+    type: Literal["square"]
+    n: int
+    answer: int
+
+
+class ModInvProblem(TypedDict):
+    type: Literal["modinv"]
+    a: int
+    m: int
+    answer: int
+
+
+Problem = SquareProblem | ModInvProblem
+Context = commands.Context[commands.Bot]
 
 
 class PracticeCog(commands.Cog):
     """A cog providing practice problems."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        # Map user ID to current problem info
-        # Each value is a dict with keys: "type", params..., "answer"
-        self.problems: dict[int, dict] = {}
+        self.problems: dict[int, Problem] = {}
 
     @commands.group(
         name="prac",
@@ -21,7 +37,7 @@ class PracticeCog(commands.Cog):
         invoke_without_command=True,
         help="Practice problems.",
     )
-    async def prac(self, ctx: commands.Context):
+    async def prac(self, ctx: Context) -> None:
         # If invoked without subcommand, show help/usage.
         prefix = ctx.clean_prefix
         lines = [
@@ -38,7 +54,7 @@ class PracticeCog(commands.Cog):
         return user_id in self.problems
 
     @prac.command(name="square", help="Generate a squaring problem.")
-    async def prac_square(self, ctx: commands.Context):
+    async def prac_square(self, ctx: Context) -> None:
         user_id = ctx.author.id
         prefix = ctx.clean_prefix
         if self._has_active(user_id):
@@ -58,7 +74,7 @@ class PracticeCog(commands.Cog):
         )
 
     @prac.command(name="modinv", help="Generate a modular inverse problem.")
-    async def prac_modinv(self, ctx: commands.Context):
+    async def prac_modinv(self, ctx: Context) -> None:
         user_id = ctx.author.id
         prefix = ctx.clean_prefix
         if self._has_active(user_id):
@@ -89,7 +105,7 @@ class PracticeCog(commands.Cog):
         help="Submit your answer to the current problem.",
         aliases=["answer"],
     )
-    async def prac_submit(self, ctx: commands.Context, user_answer: str):
+    async def prac_submit(self, ctx: Context, user_answer: str) -> None:
         user_id = ctx.author.id
         prefix = ctx.clean_prefix
         if not self._has_active(user_id):
@@ -126,7 +142,7 @@ class PracticeCog(commands.Cog):
     @prac.command(
         name="giveup", help="Give up on the current problem; shows the answer."
     )
-    async def prac_giveup(self, ctx: commands.Context):
+    async def prac_giveup(self, ctx: Context) -> None:
         user_id = ctx.author.id
         prefix = ctx.clean_prefix
         if not self._has_active(user_id):
@@ -148,8 +164,6 @@ class PracticeCog(commands.Cog):
         else:
             desc = "Unknown problem"
             ans = problem.get("answer", "<no answer stored>")
-
-        # Clear
         del self.problems[user_id]
         await ctx.send(
             f"ℹ️ You gave up. The problem was: **{desc}**\nThe answer was: **{ans}**. "
@@ -159,7 +173,7 @@ class PracticeCog(commands.Cog):
     @prac.command(
         name="current", help="View your current problem (without revealing the answer)."
     )
-    async def prac_current(self, ctx: commands.Context):
+    async def prac_current(self, ctx: Context) -> None:
         user_id = ctx.author.id
         prefix = ctx.clean_prefix
         if not self._has_active(user_id):
@@ -178,12 +192,11 @@ class PracticeCog(commands.Cog):
             desc = f"Find the inverse of {a} modulo {m}."
         else:
             desc = "Unknown problem type."
-
         await ctx.send(
             f"🔎 Your current problem: **{desc}**\n"
             f"Submit answer with `{prefix}prac submit <answer>` or give up with `{prefix}prac giveup`."
         )
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(PracticeCog(bot))

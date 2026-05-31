@@ -1,7 +1,10 @@
-import os, json
-import sqlite3
-from sympy.parsing.latex import parse_latex
+import json
+import os
 import re
+import sqlite3
+from typing import Any
+
+from sympy.parsing.latex import parse_latex
 
 DATA_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(DATA_DIR, "math500.db")
@@ -11,6 +14,13 @@ JSONL = ["train.jsonl", "test.jsonl"]
 def clean_ans(ans: str) -> str:
     cleaned = re.sub(r"\\boxed\s*\{([^}]*)\}", r"\1", ans)
     return cleaned.replace("$$", "$")
+
+
+def parse_required(text: str) -> Any:
+    expr = parse_latex(text)
+    if expr is None:
+        raise ValueError("LaTeX parser returned no expression")
+    return expr
 
 
 # Create DB & table
@@ -39,10 +49,10 @@ for fname in JSONL:
             ex = json.loads(line)
             ans = clean_ans(ex.get("answer", ""))
             try:
-                expr = parse_latex(ans)
+                expr = parse_required(ans)
                 if expr.free_symbols:
                     continue
-            except:
+            except Exception:
                 continue
             con.execute(
                 "INSERT INTO problems (problem,solution,answer_tex,subject,level,unique_id) VALUES (?,?,?,?,?,?)",

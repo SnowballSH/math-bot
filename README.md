@@ -1,16 +1,39 @@
-# FireballSH
+# Math Bot
 
 ![fireballsh](https://github.com/user-attachments/assets/b48650c4-253d-4475-a478-fad462a78d83)
 
-A Discord Bot that Provides Students with 24/7 Math Practice
+A Discord bot for math practice problems, rendered LaTeX/Asymptote prompts, and a persistent SQLite leaderboard.
 
-## Things to download
+## Setup
 
-- `requirements.txt`
-- `pdftex`
+Install Python dependencies with `uv`:
+
+```sh
+uv sync
+```
+
+Install the system rendering tools used by the `math` cog:
+
+- `pdftex` / `pdflatex`
 - `pdftocairo`
-- `math500` [files](https://github.com/openai/prm800k/blob/main/prm800k/math_splits)
 - `asymptote`
 
-Create a `.env` file based on `.env.example` and fill in your Discord token and
-the configuration for the AMC Problem of the Day feature.
+Copy `.env.example` to `.env` and set `DISCORD_TOKEN`.
+
+The ignored `cogs/math500/train.jsonl` and `cogs/math500/test.jsonl` files should come from the `math_splits` data in the [prm800k repository](https://github.com/openai/prm800k/tree/main/prm800k/math_splits).
+On first startup, the `math` cog creates the ignored `cogs/math500/math500.db` SQLite database from those JSONL files.
+
+## Run
+
+```sh
+uv run python main.py
+```
+
+## Test
+
+```sh
+uv run ruff check .
+uv run ruff format --check .
+uv run basedpyright
+uv run pytest --cov
+```
