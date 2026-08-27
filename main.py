@@ -4,7 +4,19 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 
-EXTENSIONS = ("jishaku", "cogs.prac", "cogs.math")
+BASE_EXTENSIONS = ("cogs.prac", "cogs.math")
+
+
+def jishaku_enabled() -> bool:
+    value = os.getenv("MATHBOT_ENABLE_JISHAKU", "")
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def enabled_extensions() -> tuple[str, ...]:
+    if jishaku_enabled():
+        return ("jishaku", *BASE_EXTENSIONS)
+    return BASE_EXTENSIONS
+
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -15,7 +27,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 async def load_extensions():
-    for extension in EXTENSIONS:
+    for extension in enabled_extensions():
         try:
             await bot.load_extension(extension)
             print(f"Loaded {extension}")
