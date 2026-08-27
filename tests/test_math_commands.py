@@ -195,3 +195,47 @@ def test_render_text_image_latex_and_asy() -> None:
 
     assert latex.getbuffer().nbytes > 0
     assert asy.getbuffer().nbytes > 0
+
+
+def test_render_text_image_invalid_latex_fails() -> None:
+    with pytest.raises(RuntimeError, match="Failed to render"):
+        MathCog._render_text_image(r"$\thisisnotacommand$")
+
+
+def test_render_text_image_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+
+    def fake_run(*args: Any, **kwargs: Any) -> None:
+        raise subprocess.TimeoutExpired(cmd="pdflatex", timeout=1)
+
+    monkeypatch.setattr("cogs.math.subprocess.run", fake_run)
+    with pytest.raises(RuntimeError, match="timed out"):
+        MathCog._render_text_image("$x$")
+
+
+def test_render_commands_have_user_cooldowns() -> None:
+    from discord.ext import commands
+
+    for cmd in (
+        MathCog.math_problem,
+        MathCog.math_submit,
+        MathCog.math_giveup,
+        MathCog.math_current,
+    ):
+        buckets = cast(Any, cmd)._buckets
+        assert buckets._cooldown is not None
+        assert buckets._type is commands.BucketType.user
+
+
+@pytest.mark.asyncio
+async def test_cooldown_error_sends_retry_message(math_cog: MathCog) -> None:
+    from discord.ext import commands
+
+    ctx = FakeContext()
+    error = commands.CommandOnCooldown(
+        commands.Cooldown(1, 5), 3.2, commands.BucketType.user
+    )
+
+    await math_cog.cog_command_error(cast(Any, ctx), error)
+
+    assert "try again" in ctx.last_message

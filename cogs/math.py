@@ -1,3 +1,4 @@
+import asyncio
 import os
 import io
 import json
@@ -7,22 +8,27 @@ import subprocess
 import tempfile
 import shutil
 import logging
-from subprocess import PIPE, CalledProcessError
-from typing import Any, Dict, Optional, cast
+from subprocess import CalledProcessError, TimeoutExpired
+from typing import Any, Dict, Optional
 
 import discord
 from discord.ext import commands
-from sympy import N, sympify
-from sympy.parsing.latex import parse_latex
+
+from cogs.answer_check import (
+    check_answer,
+    check_answer_in_subprocess,
+    clean_answer_latex,
+    parse_latex_required as _parse_latex_required,
+)
 
 logger = logging.getLogger(__name__)
 
+RENDER_TOOL_TIMEOUT_SECONDS = 60
+MAX_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_TOOL_LOG_BYTES = 2048
+RENDER_CONCURRENCY = 2
 
-def _parse_latex_required(text: str) -> Any:
-    expr = parse_latex(text)
-    if expr is None:
-        raise ValueError("LaTeX parser returned no expression")
-    return expr
+_RENDER_SEMAPHORE = asyncio.Semaphore(RENDER_CONCURRENCY)
 
 
 class MathCog(commands.Cog):
@@ -154,8 +160,7 @@ class MathCog(commands.Cog):
 
     @staticmethod
     def _clean_answer_latex(ans: str) -> str:
-        cleaned = re.sub(r"\\boxed\s*\{([^}]*)\}", r"\1", ans)
-        return cleaned.replace("$$", "$")
+        return clean_answer_latex(ans)
 
     @staticmethod
     def _convert_tags(text: str) -> str:
@@ -229,45 +234,33 @@ class MathCog(commands.Cog):
                 if os.path.exists(olymp):
                     shutil.copy(olymp, tmpdir)
             try:
-                subprocess.run(
+                MathCog._run_render_tool(
                     [
                         "pdflatex",
                         "-interaction=nonstopmode",
                         "-halt-on-error",
                         tex_path,
                     ],
-                    cwd=tmpdir,
-                    stdout=PIPE,
-                    stderr=PIPE,
-                    check=True,
+                    tmpdir,
                 )
 
                 if has_asy:
                     for asy_file in sorted(
                         p for p in os.listdir(tmpdir) if p.endswith(".asy")
                     ):
-                        subprocess.run(
-                            ["asy", asy_file],
-                            cwd=tmpdir,
-                            stdout=PIPE,
-                            stderr=PIPE,
-                            check=True,
-                        )
+                        MathCog._run_render_tool(["asy", asy_file], tmpdir)
 
-                    subprocess.run(
+                    MathCog._run_render_tool(
                         [
                             "pdflatex",
                             "-interaction=nonstopmode",
                             "-halt-on-error",
                             tex_path,
                         ],
-                        cwd=tmpdir,
-                        stdout=PIPE,
-                        stderr=PIPE,
-                        check=True,
+                        tmpdir,
                     )
 
-                subprocess.run(
+                MathCog._run_render_tool(
                     [
                         "pdftocairo",
                         "-png",
@@ -277,20 +270,19 @@ class MathCog(commands.Cog):
                         os.path.join(tmpdir, "out.pdf"),
                         os.path.join(tmpdir, "out"),
                     ],
-                    cwd=tmpdir,
-                    stdout=PIPE,
-                    stderr=PIPE,
-                    check=True,
+                    tmpdir,
                 )
             except FileNotFoundError as e:
                 logger.error("LaTeX tool missing: %s", e)
                 raise RuntimeError(f"Rendering tool not found: {e}") from e
+            except TimeoutExpired as e:
+                logger.error("LaTeX subprocess timed out: %s", e)
+                raise RuntimeError("Rendering timed out") from e
             except CalledProcessError as e:
                 logger.error(
-                    "LaTeX subprocess failed: %s; stdout: %s; stderr: %s",
+                    "LaTeX subprocess failed: %s; log tail: %s",
                     e,
-                    e.stdout,
-                    e.stderr,
+                    MathCog._read_tool_log(tmpdir),
                 )
                 raise RuntimeError("Failed to render LaTeX") from e
 
@@ -299,29 +291,43 @@ class MathCog(commands.Cog):
             if not os.path.exists(img_path):
                 logger.error("Expected image not found: %s", img_path)
                 raise RuntimeError("Rendered image not found")
+            if os.path.getsize(img_path) > MAX_IMAGE_BYTES:
+                logger.error("Rendered image exceeds size cap: %s", img_path)
+                raise RuntimeError("Rendered image too large")
             with open(img_path, "rb") as img_file:
                 buf.write(img_file.read())
             buf.seek(0)
             return buf
 
+    @staticmethod
+    def _run_render_tool(args: list[str], cwd: str) -> None:
+        log_path = os.path.join(cwd, "tool-output.log")
+        with open(log_path, "ab") as log_file:
+            subprocess.run(
+                args,
+                cwd=cwd,
+                stdout=log_file,
+                stderr=log_file,
+                check=True,
+                timeout=RENDER_TOOL_TIMEOUT_SECONDS,
+            )
+
+    @staticmethod
+    def _read_tool_log(cwd: str) -> str:
+        log_path = os.path.join(cwd, "tool-output.log")
+        try:
+            with open(log_path, "rb") as log_file:
+                log_file.seek(0, os.SEEK_END)
+                size = log_file.tell()
+                log_file.seek(max(0, size - MAX_TOOL_LOG_BYTES))
+                return log_file.read().decode(errors="replace")
+        except OSError:
+            return ""
+
     def _check_answer(
         self, user_ans: str, correct_expr: Any
     ) -> tuple[bool, Optional[str]]:
-        ans = self._clean_answer_latex(user_ans).strip().replace("$", "")
-        try:
-            ue = _parse_latex_required(ans)
-            if ue.free_symbols:
-                return False, "invalid"
-            diff = abs(float(N(ue, 15)) - float(N(correct_expr, 15)))
-        except Exception:
-            try:
-                ue = cast(Any, sympify)(ans, evaluate=True)
-                if ue.free_symbols:
-                    return False, "invalid"
-                diff = abs(float(N(ue, 15)) - float(N(correct_expr, 15)))
-            except Exception:
-                return False, "invalid"
-        return (True, None) if diff < 1e-6 else (False, "wrong")
+        return check_answer(user_ans, correct_expr)
 
     @staticmethod
     def _parse_problem_args(args: str | None) -> tuple[Optional[str], Optional[int]]:
@@ -360,7 +366,8 @@ class MathCog(commands.Cog):
         footer: Optional[str] = None,
     ) -> None:
         try:
-            buf = self._render_text_image(text)
+            async with _RENDER_SEMAPHORE:
+                buf = await asyncio.to_thread(self._render_text_image, text)
         except RuntimeError as e:
             logger.error("Image rendering error for '%s': %s", title, e)
             await ctx.send(f"Error rendering LaTeX: {e}\nRaw LaTeX:\n```{text}```")
@@ -372,6 +379,16 @@ class MathCog(commands.Cog):
         if footer:
             embed.set_footer(text=footer)
         await ctx.send(file=file, embed=embed)
+
+    async def cog_command_error(
+        self, ctx: commands.Context, error: commands.CommandError
+    ) -> None:
+        if isinstance(error, commands.CommandOnCooldown):
+            await ctx.send(
+                f"⏳ Slow down — try again in {error.retry_after:.1f} seconds."
+            )
+            return
+        logger.error("Command error in %s: %s", ctx.command, error, exc_info=error)
 
     @commands.group(name="math", invoke_without_command=True)
     async def math(self, ctx: commands.Context) -> None:
@@ -386,6 +403,7 @@ class MathCog(commands.Cog):
         await ctx.send("__**Math commands**__\n" + "\n".join(commands_list))
 
     @math.command(name="problem")
+    @commands.cooldown(1, 15, commands.BucketType.user)
     async def math_problem(
         self, ctx: commands.Context, *, args: Optional[str] = None
     ) -> None:
@@ -427,6 +445,7 @@ class MathCog(commands.Cog):
             await ctx.send("An unexpected error occurred. Please try again later.")
 
     @math.command(name="submit", aliases=["answer"])
+    @commands.cooldown(1, 5, commands.BucketType.user)
     async def math_submit(self, ctx: commands.Context, *, user_ans: str) -> None:
         try:
             uid = ctx.author.id
@@ -440,15 +459,17 @@ class MathCog(commands.Cog):
             row = self.conn.execute(
                 "SELECT solution, answer_tex FROM problems WHERE id = ?", (pid,)
             ).fetchone()
-            correct_expr = _parse_latex_required(row["answer_tex"])
-            correct, err = self._check_answer(user_ans, correct_expr)
+            correct, err = await check_answer_in_subprocess(user_ans, row["answer_tex"])
 
             if not correct:
-                msg = (
-                    "Invalid format."
-                    if err == "invalid"
-                    else f"❌ Incorrect. Try again or use `{ctx.clean_prefix}math giveup`."
-                )
+                if err == "invalid":
+                    msg = "Invalid format."
+                elif err == "timeout":
+                    msg = (
+                        "⏱️ Evaluation took too long. Try a simpler form of your answer."
+                    )
+                else:
+                    msg = f"❌ Incorrect. Try again or use `{ctx.clean_prefix}math giveup`."
                 await ctx.send(msg)
                 return
 
@@ -463,6 +484,7 @@ class MathCog(commands.Cog):
             await ctx.send("An unexpected error occurred. Please try again later.")
 
     @math.command(name="giveup")
+    @commands.cooldown(1, 10, commands.BucketType.user)
     async def math_giveup(self, ctx: commands.Context) -> None:
         try:
             uid = ctx.author.id
@@ -486,6 +508,7 @@ class MathCog(commands.Cog):
             await ctx.send("An unexpected error occurred. Please try again later.")
 
     @math.command(name="current")
+    @commands.cooldown(1, 10, commands.BucketType.user)
     async def math_current(self, ctx: commands.Context) -> None:
         try:
             uid = ctx.author.id
